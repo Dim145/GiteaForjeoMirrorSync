@@ -1,0 +1,23 @@
+[package]
+name = "gitea-mirror-sync"
+version = "0.1.0"
+edition = "2021"
+description = "Keep mirror repositories on a Gitea/Forgejo instance in sync with a source forge (GitHub/GitLab/Gitea/Gitbucket)"
+license = "MIT"
+
+[dependencies]
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "signal", "time"] }
+reqwest = { version = "0.12", default-features = false, features = ["rustls-tls-webpki-roots", "json"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+figment = { version = "0.10", features = ["env"] }
+cron = "0.12"
+chrono = { version = "0.4", default-features = false, features = ["clock"] }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+anyhow = "1"
+backon = "1"
+regex = "1"
+clap = { version = "4", features = ["derive"] }
+sha2 = "0.10"
+dotenvy = "0.15"

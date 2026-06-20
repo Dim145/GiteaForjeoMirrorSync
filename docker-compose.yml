@@ -1,0 +1,55 @@
+services:
+  # --- A real Gitea instance, used here as BOTH the source and the target so the
+  #     stack is fully self-contained for testing. In real use, point GMS_SOURCE_*
+  #     at your external forge (GitHub/GitLab/...). ---
+  gitea:
+    image: gitea/gitea:latest
+    environment:
+      USER_UID: "1000"
+      USER_GID: "1000"
+      GITEA__security__INSTALL_LOCK: "true"
+      GITEA__server__ROOT_URL: "http://gitea:3000/"
+      GITEA__server__HTTP_PORT: "3000"
+      GITEA__database__DB_TYPE: "sqlite3"
+      # Only needed for this self-contained test, where the "source" forge is on
+      # the same private Docker network. Not needed when mirroring from GitHub/etc.
+      GITEA__migrations__ALLOW_LOCALNETWORKS: "true"
+    volumes:
+      - gitea-data:/data
+    ports:
+      - "3000:3000"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://localhost:3000/api/v1/version || exit 1"]
+      interval: 3s
+      timeout: 3s
+      retries: 30
+      start_period: 5s
+
+  mirror-sync:
+    build: .
+    image: gitea-mirror-sync:latest
+    depends_on:
+      gitea:
+        condition: service_healthy
+    environment:
+      # Target = the local Gitea, mirrors go under org "mirrors".
+      GMS_TARGET_URL: "http://gitea:3000"
+      GMS_TARGET_TOKEN: "${GMS_TARGET_TOKEN:-}"
+      GMS_TARGET_OWNER: "mirrors"
+      GMS_TARGET_OWNER_TYPE: "org"
+      # Source = the same Gitea, org "srcorg" (stands in for GitHub/GitLab/...).
+      GMS_SOURCE_TYPE: "gitea"
+      GMS_SOURCE_URL: "http://gitea:3000"
+      GMS_SOURCE_TOKEN: "${GMS_SOURCE_TOKEN:-}"
+      GMS_SOURCE_OWNER: "srcorg"
+      GMS_SOURCE_OWNER_TYPE: "org"
+      GMS_STATE_FILE: "/data/gms-state.json"
+      RUST_LOG: "info,gitea_mirror_sync=debug"
+    volumes:
+      - mirror-data:/data
+    # No command => runs as a daemon on the cron schedule.
+    # For a one-shot run:  docker compose run --rm mirror-sync --once
+
+volumes:
+  gitea-data:
+  mirror-data:

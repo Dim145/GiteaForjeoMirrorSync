@@ -1,0 +1,7 @@
+/target
+.git
+.gitignore
+.env
+*.tmp
+gms-state.json
+README.md

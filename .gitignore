@@ -1,0 +1,9 @@
+/target
+*.tmp
+gms-state.json
+gms-state.json.tmp
+.env
+
+# Session tooling / local editor state
+.remember/
+.claude/settings.local.json
