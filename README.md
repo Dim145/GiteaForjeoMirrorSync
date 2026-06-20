@@ -108,6 +108,26 @@ docker compose run --rm mirror-sync --once
 > (Gitea blocks migrations from private hosts by default as an anti-SSRF measure).
 > You do **not** need this when mirroring from GitHub/GitLab/etc.
 
+## Releases (GitHub Actions → GHCR)
+
+Two workflows are included:
+
+- [`.github/workflows/ci.yml`](.github/workflows/ci.yml) — runs `cargo fmt`,
+  `clippy` and the tests on every push to `main` and on PRs.
+- [`.github/workflows/release.yml`](.github/workflows/release.yml) — when you
+  **publish a GitHub Release**, it builds the image and pushes it to
+  `ghcr.io/<owner>/<repo>` (multi-arch amd64 + arm64), tagged with the release
+  version, `<major>.<minor>`, the tag name, and `latest`.
+
+Use a semver tag (e.g. `v1.2.3`) for the release so the version tags are derived
+correctly. No secrets to configure — the workflow uses the built-in
+`GITHUB_TOKEN` (`packages: write`). After the first push you can make the package
+public from the repo's *Packages* settings, then:
+
+```sh
+docker pull ghcr.io/<owner>/<repo>:latest
+```
+
 ## Notes & caveats
 
 - **Token rotation API**: updating an existing pull mirror's credentials only has
