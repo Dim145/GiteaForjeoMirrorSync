@@ -7,3 +7,4 @@ gms-state.json.tmp
 # Session tooling / local editor state
 .remember/
 .claude/settings.local.json
+.idea/
