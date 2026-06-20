@@ -58,7 +58,11 @@ impl Target {
     pub async fn detect(&self, configured: OwnerType) -> Capabilities {
         let mut caps = Capabilities::default();
 
-        if let Ok(resp) = self.auth(self.http.get(format!("{}/version", self.api))).send().await {
+        if let Ok(resp) = self
+            .auth(self.http.get(format!("{}/version", self.api)))
+            .send()
+            .await
+        {
             if let Ok(v) = resp.json::<serde_json::Value>().await {
                 caps.version = v
                     .get("version")
@@ -100,11 +104,7 @@ impl Target {
         let Ok(spec) = resp.json::<serde_json::Value>().await else {
             return false;
         };
-        spec.get("definitions")
-            .and_then(|d| d.get("EditRepoOption"))
-            .and_then(|e| e.get("properties"))
-            .and_then(|p| p.get("mirror_token"))
-            .is_some()
+        swagger_has_mirror_token(&spec)
     }
 
     /// List all repos under the configured owner.
@@ -185,5 +185,58 @@ impl Target {
             .await
             .with_context(|| format!("triggering sync for '{name}'"))?;
         Ok(())
+    }
+}
+
+/// Whether a swagger spec declares the `mirror_token` field on `EditRepoOption`.
+fn swagger_has_mirror_token(spec: &serde_json::Value) -> bool {
+    spec.get("definitions")
+        .and_then(|d| d.get("EditRepoOption"))
+        .and_then(|e| e.get("properties"))
+        .and_then(|p| p.get("mirror_token"))
+        .is_some()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+
+    #[test]
+    fn swagger_detects_mirror_token() {
+        let with = json!({
+            "definitions": { "EditRepoOption": { "properties": {
+                "mirror_interval": {"type": "string"},
+                "mirror_token": {"type": "string"}
+            }}}
+        });
+        let without = json!({
+            "definitions": { "EditRepoOption": { "properties": {
+                "mirror_interval": {"type": "string"}
+            }}}
+        });
+        assert!(swagger_has_mirror_token(&with));
+        assert!(!swagger_has_mirror_token(&without));
+        assert!(!swagger_has_mirror_token(&json!({})));
+    }
+
+    #[test]
+    fn repo_deserializes_with_defaults() {
+        // A converted/normal repo: only some fields present.
+        let r: Repo = serde_json::from_value(json!({
+            "name": "x",
+            "original_url": "https://src/x.git"
+        }))
+        .unwrap();
+        assert_eq!(r.name, "x");
+        assert!(!r.mirror); // defaulted
+        assert_eq!(r.original_url, "https://src/x.git");
+
+        let m: Repo = serde_json::from_value(json!({
+            "name": "y", "mirror": true, "private": true, "original_url": ""
+        }))
+        .unwrap();
+        assert!(m.mirror);
+        assert!(m.private);
     }
 }

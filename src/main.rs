@@ -40,14 +40,21 @@ struct Cli {
 async fn main() -> Result<()> {
     dotenvy::dotenv().ok();
     tracing_subscriber::fmt()
-        .with_env_filter(EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info")))
+        .with_env_filter(
+            EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info")),
+        )
         .init();
 
     let cli = Cli::parse();
     let cfg = Config::load()?;
 
     let http = http::build_client()?;
-    let target = Target::new(http.clone(), &cfg.target_url, &cfg.target_token, &cfg.target_owner);
+    let target = Target::new(
+        http.clone(),
+        &cfg.target_url,
+        &cfg.target_token,
+        &cfg.target_owner,
+    );
 
     info!("detecting target capabilities…");
     let caps = target.detect(cfg.target_owner_type).await;
@@ -64,8 +71,14 @@ async fn main() -> Result<()> {
 
     if cli.check {
         println!("--- gitea-mirror-sync --check ---");
-        println!("Source : {:?}  owner='{}'", cfg.source_type, cfg.source_owner);
-        println!("Target : '{}'  owner='{}'", cfg.target_url, cfg.target_owner);
+        println!(
+            "Source : {:?}  owner='{}'",
+            cfg.source_type, cfg.source_owner
+        );
+        println!(
+            "Target : '{}'  owner='{}'",
+            cfg.target_url, cfg.target_owner
+        );
         println!("Capabilities:\n{caps:#?}");
         if cfg.rotation_mode == config::RotationMode::Auto && !caps.supports_pull_mirror_patch {
             println!(

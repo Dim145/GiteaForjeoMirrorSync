@@ -7,7 +7,8 @@ use crate::http::paginate;
 /// List repos from a Gitea/Forgejo source.
 ///
 /// - Org:  `GET /orgs/{org}/repos`.
-/// - User: `GET /user/repos` (authenticated, includes private) filtered to owner.
+/// - User: `GET /user/repos` (authenticated, incl. private) filtered to the owner;
+///   falls back to that user's public repos for a different user.
 pub async fn list(src: &Source, ot: OwnerType) -> Result<Vec<SourceRepo>> {
     let base = src.base_url.trim_end_matches('/'); // already ends with /api/v1
     let size = 50usize; // Gitea caps page size (MAX_RESPONSE_ITEMS, default 50)
@@ -35,11 +36,13 @@ pub async fn list(src: &Source, ot: OwnerType) -> Result<Vec<SourceRepo>> {
                 500,
             )
             .await?;
-            let owned: Vec<_> = all.into_iter().filter(|v| owner_matches(v, &src.owner)).collect();
+            let owned: Vec<_> = all
+                .into_iter()
+                .filter(|v| owner_matches(v, &src.owner))
+                .collect();
             if !owned.is_empty() {
                 owned
             } else {
-                // owner is not the authenticated account → list that user's public repos
                 let url2 = format!("{base}/users/{}/repos", src.owner);
                 paginate(
                     |p| {
@@ -73,4 +76,36 @@ fn map_repo(v: &serde_json::Value) -> Option<SourceRepo> {
         archived: jbool(v, "archived"),
         description: jstr(v, "description"),
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+
+    #[test]
+    fn maps_gitea_repo() {
+        let v = json!({
+            "name": "r",
+            "clone_url": "https://gitea.example/r.git",
+            "private": false,
+            "fork": true,
+            "archived": false
+        });
+        let r = map_repo(&v).unwrap();
+        assert_eq!(r.name, "r");
+        assert_eq!(r.clone_url, "https://gitea.example/r.git");
+        assert!(r.fork);
+        assert!(!r.private);
+    }
+
+    #[test]
+    fn owner_matches_login_or_username() {
+        assert!(owner_matches(&json!({"owner": {"login": "Org"}}), "org"));
+        assert!(owner_matches(&json!({"owner": {"username": "Bob"}}), "bob"));
+        assert!(!owner_matches(
+            &json!({"owner": {"username": "bob"}}),
+            "alice"
+        ));
+    }
 }

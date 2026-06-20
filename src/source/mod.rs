@@ -91,8 +91,13 @@ impl Source {
             SourceType::Gitlab => format!("{base}/groups/{}", encode_path(&self.owner)),
             _ => format!("{base}/orgs/{}", self.owner),
         };
-        let is_org = matches!(self.auth(self.http.get(&url)).send().await, Ok(r) if r.status().is_success());
-        let resolved = if is_org { OwnerType::Org } else { OwnerType::User };
+        let is_org =
+            matches!(self.auth(self.http.get(&url)).send().await, Ok(r) if r.status().is_success());
+        let resolved = if is_org {
+            OwnerType::Org
+        } else {
+            OwnerType::User
+        };
         tracing::debug!(owner = %self.owner, ?resolved, "auto-detected source owner type");
         resolved
     }
@@ -109,4 +114,34 @@ pub(crate) fn jstr(v: &serde_json::Value, key: &str) -> Option<String> {
 
 pub(crate) fn jbool(v: &serde_json::Value, key: &str) -> bool {
     v.get(key).and_then(|x| x.as_bool()).unwrap_or(false)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+
+    #[test]
+    fn encode_path_escapes_slashes_and_spaces() {
+        assert_eq!(encode_path("group/sub"), "group%2Fsub");
+        assert_eq!(encode_path("my org"), "my%20org");
+        assert_eq!(encode_path("plain"), "plain");
+    }
+
+    #[test]
+    fn jstr_reads_strings_or_none() {
+        let v = json!({ "name": "repo", "description": null, "n": 5 });
+        assert_eq!(jstr(&v, "name").as_deref(), Some("repo"));
+        assert_eq!(jstr(&v, "description"), None);
+        assert_eq!(jstr(&v, "missing"), None);
+        assert_eq!(jstr(&v, "n"), None); // not a string
+    }
+
+    #[test]
+    fn jbool_defaults_to_false() {
+        let v = json!({ "private": true, "fork": false });
+        assert!(jbool(&v, "private"));
+        assert!(!jbool(&v, "fork"));
+        assert!(!jbool(&v, "missing"));
+    }
 }

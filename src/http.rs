@@ -35,7 +35,11 @@ where
     F: Fn() -> RequestBuilder,
 {
     let result = (|| async { do_send(make()).await })
-        .retry(ExponentialBuilder::default().with_max_times(4).with_jitter())
+        .retry(
+            ExponentialBuilder::default()
+                .with_max_times(4)
+                .with_jitter(),
+        )
         .when(|e: &SendError| match e {
             SendError::Transport(err) => err.is_timeout() || err.is_connect(),
             SendError::Status(s, _) => s.is_server_error() || s.as_u16() == 429,
@@ -44,16 +48,22 @@ where
     match result {
         Ok(resp) => Ok(resp),
         Err(SendError::Transport(e)) => Err(anyhow::Error::new(e).context("HTTP request failed")),
-        Err(SendError::Status(s, body)) => {
-            Err(anyhow::anyhow!("API returned HTTP {}: {}", s, truncate(&body, 600)))
-        }
+        Err(SendError::Status(s, body)) => Err(anyhow::anyhow!(
+            "API returned HTTP {}: {}",
+            s,
+            truncate(&body, 600)
+        )),
     }
 }
 
 /// Fetch a paginated JSON list endpoint. `make_page(page)` builds the request for
 /// a given 1-based page. Stops when a page returns fewer than `page_size` items
 /// (or `max_pages` is reached). Works across GitHub/GitLab/Gitea/Gitbucket.
-pub async fn paginate<F>(make_page: F, page_size: usize, max_pages: usize) -> Result<Vec<serde_json::Value>>
+pub async fn paginate<F>(
+    make_page: F,
+    page_size: usize,
+    max_pages: usize,
+) -> Result<Vec<serde_json::Value>>
 where
     F: Fn(usize) -> RequestBuilder,
 {

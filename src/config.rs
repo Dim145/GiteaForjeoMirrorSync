@@ -115,37 +115,107 @@ impl Config {
     /// Compute the API base URL for the configured source forge, applying the
     /// per-forge suffix (e.g. `/api/v4` for GitLab) when the user gave a bare host.
     pub fn source_api_base(&self) -> Result<String> {
-        let raw = match &self.source_url {
-            Some(u) => u.trim_end_matches('/').to_string(),
-            None => match self.source_type {
-                SourceType::Github => "https://api.github.com".into(),
-                SourceType::Gitlab => "https://gitlab.com".into(),
-                other => anyhow::bail!("GMS_SOURCE_URL is required for source type {other:?}"),
-            },
-        };
-        Ok(match self.source_type {
-            SourceType::Github => raw,
-            SourceType::Gitlab => {
-                if raw.contains("/api/v") {
-                    raw
-                } else {
-                    format!("{raw}/api/v4")
-                }
+        compute_source_api_base(self.source_type, self.source_url.as_deref())
+    }
+}
+
+fn compute_source_api_base(source_type: SourceType, source_url: Option<&str>) -> Result<String> {
+    let raw = match source_url {
+        Some(u) => u.trim_end_matches('/').to_string(),
+        None => match source_type {
+            SourceType::Github => "https://api.github.com".into(),
+            SourceType::Gitlab => "https://gitlab.com".into(),
+            other => anyhow::bail!("GMS_SOURCE_URL is required for source type {other:?}"),
+        },
+    };
+    Ok(match source_type {
+        SourceType::Github => raw,
+        SourceType::Gitlab => {
+            if raw.contains("/api/v") {
+                raw
+            } else {
+                format!("{raw}/api/v4")
             }
-            SourceType::Gitea => {
-                if raw.ends_with("/api/v1") {
-                    raw
-                } else {
-                    format!("{raw}/api/v1")
-                }
+        }
+        SourceType::Gitea => {
+            if raw.ends_with("/api/v1") {
+                raw
+            } else {
+                format!("{raw}/api/v1")
             }
-            SourceType::Gitbucket => {
-                if raw.contains("/api/v3") {
-                    raw
-                } else {
-                    format!("{raw}/api/v3")
-                }
+        }
+        SourceType::Gitbucket => {
+            if raw.contains("/api/v3") {
+                raw
+            } else {
+                format!("{raw}/api/v3")
             }
-        })
+        }
+    })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn github_default_and_explicit() {
+        assert_eq!(
+            compute_source_api_base(SourceType::Github, None).unwrap(),
+            "https://api.github.com"
+        );
+        assert_eq!(
+            compute_source_api_base(SourceType::Github, Some("https://ghe.example.com/api/v3/"))
+                .unwrap(),
+            "https://ghe.example.com/api/v3"
+        );
+    }
+
+    #[test]
+    fn gitlab_adds_api_v4_once() {
+        assert_eq!(
+            compute_source_api_base(SourceType::Gitlab, None).unwrap(),
+            "https://gitlab.com/api/v4"
+        );
+        assert_eq!(
+            compute_source_api_base(SourceType::Gitlab, Some("https://gl.example.com")).unwrap(),
+            "https://gl.example.com/api/v4"
+        );
+        assert_eq!(
+            compute_source_api_base(SourceType::Gitlab, Some("https://gl.example.com/api/v4"))
+                .unwrap(),
+            "https://gl.example.com/api/v4"
+        );
+    }
+
+    #[test]
+    fn gitea_adds_api_v1_once() {
+        assert_eq!(
+            compute_source_api_base(SourceType::Gitea, Some("https://gitea.example.com/")).unwrap(),
+            "https://gitea.example.com/api/v1"
+        );
+        assert_eq!(
+            compute_source_api_base(SourceType::Gitea, Some("https://gitea.example.com/api/v1"))
+                .unwrap(),
+            "https://gitea.example.com/api/v1"
+        );
+    }
+
+    #[test]
+    fn gitbucket_adds_api_v3() {
+        assert_eq!(
+            compute_source_api_base(
+                SourceType::Gitbucket,
+                Some("https://gb.example.com/gitbucket")
+            )
+            .unwrap(),
+            "https://gb.example.com/gitbucket/api/v3"
+        );
+    }
+
+    #[test]
+    fn gitea_and_gitbucket_require_url() {
+        assert!(compute_source_api_base(SourceType::Gitea, None).is_err());
+        assert!(compute_source_api_base(SourceType::Gitbucket, None).is_err());
     }
 }

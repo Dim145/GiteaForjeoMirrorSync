@@ -36,11 +36,13 @@ pub async fn list(src: &Source, ot: OwnerType) -> Result<Vec<SourceRepo>> {
                 100,
             )
             .await?;
-            let owned: Vec<_> = all.into_iter().filter(|v| owner_matches(v, &src.owner)).collect();
+            let owned: Vec<_> = all
+                .into_iter()
+                .filter(|v| owner_matches(v, &src.owner))
+                .collect();
             if !owned.is_empty() {
                 owned
             } else {
-                // owner is not the authenticated account → list that user's public repos
                 let url2 = format!("{base}/users/{}/repos", src.owner);
                 paginate(
                     |p| {
@@ -74,4 +76,31 @@ fn map_repo(v: &serde_json::Value) -> Option<SourceRepo> {
         archived: jbool(v, "archived"),
         description: jstr(v, "description"),
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+
+    #[test]
+    fn maps_gitbucket_repo() {
+        let v = json!({
+            "name": "r",
+            "clone_url": "http://gb.example/git/u/r.git",
+            "private": true
+        });
+        let r = map_repo(&v).unwrap();
+        assert_eq!(r.name, "r");
+        assert_eq!(r.clone_url, "http://gb.example/git/u/r.git");
+        assert!(r.private);
+        assert!(!r.fork);
+        assert!(!r.archived);
+    }
+
+    #[test]
+    fn owner_matches_login() {
+        assert!(owner_matches(&json!({"owner": {"login": "Acme"}}), "acme"));
+        assert!(!owner_matches(&json!({"owner": {"login": "Acme"}}), "nope"));
+    }
 }

@@ -51,8 +51,7 @@ async fn shutdown_signal() {
 
     #[cfg(unix)]
     let term = async {
-        if let Ok(mut s) =
-            tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate())
+        if let Ok(mut s) = tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate())
         {
             s.recv().await;
         }

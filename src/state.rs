@@ -62,3 +62,44 @@ pub fn fingerprint(token: &str) -> String {
     h.update(token.as_bytes());
     format!("{:x}", h.finalize())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn fingerprint_is_stable_and_distinct() {
+        assert_eq!(fingerprint("abc"), fingerprint("abc"));
+        assert_ne!(fingerprint("abc"), fingerprint("abd"));
+        assert_eq!(fingerprint("abc").len(), 64); // sha-256 hex
+    }
+
+    #[test]
+    fn load_missing_file_is_empty() {
+        let path = std::env::temp_dir().join("gms-test-missing-xyz.json");
+        let _ = std::fs::remove_file(&path);
+        let s = State::load(&path).unwrap();
+        assert!(s.managed.is_empty());
+        assert!(s.blacklist.is_empty());
+        assert!(s.token_fingerprint.is_none());
+    }
+
+    #[test]
+    fn save_then_load_roundtrip() {
+        let path = std::env::temp_dir().join("gms-test-roundtrip.json");
+        let _ = std::fs::remove_file(&path);
+
+        let mut s = State::load(&path).unwrap();
+        s.managed.insert("repo-a".into());
+        s.blacklist.insert("repo-b".into());
+        s.token_fingerprint = Some("deadbeef".into());
+        s.save().unwrap();
+
+        let loaded = State::load(&path).unwrap();
+        assert!(loaded.managed.contains("repo-a"));
+        assert!(loaded.blacklist.contains("repo-b"));
+        assert_eq!(loaded.token_fingerprint.as_deref(), Some("deadbeef"));
+
+        let _ = std::fs::remove_file(&path);
+    }
+}
